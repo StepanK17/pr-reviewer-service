@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres_e2e:
+    image: postgres:15-alpine
+    container_name: pr_reviewer_postgres_e2e
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pr_reviewer_e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - e2e_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pr_reviewer_app_e2e
+    environment:
+      HTTP_PORT: 8080
+      DB_HOST: postgres_e2e
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: pr_reviewer_e2e
+      DB_SSLMODE: disable
+      ADMIN_TOKEN: secret_admin_token_change_me
+      LOG_LEVEL: info
+    depends_on:
+      postgres_e2e:
+        condition: service_healthy
+    networks:
+      - e2e_network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  e2e_tests:
+    build:
+      context: .
+      dockerfile: e2e_tests/Dockerfile
+    container_name: pr_reviewer_e2e_tests
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - e2e_network
+
+networks:
+  e2e_network:
+    driver: bridge
